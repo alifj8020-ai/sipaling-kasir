@@ -1161,16 +1161,10 @@ function getRiderStatsForDate(dateObj) {
     return dt.getDate() === dateObj.getDate() && dt.getMonth() === dateObj.getMonth() && dt.getFullYear() === dateObj.getFullYear(); 
   });
   
-  const stats = {};
-  dayData.forEach(d => { 
-    if(!stats[d.rider]) stats[d.rider] = {omzet:0, porsi:0, trx:0, cash:0}; 
-    stats[d.rider].omzet += Number(d.total); 
-    stats[d.rider].porsi += Number(d.qty); 
-    stats[d.rider].trx += 1; 
-    if(d.bayar==='Cash') stats[d.rider].cash += Number(d.total); 
-  });
-  return stats;
-}
+  const riderStats = {};
+  dayData.forEach(d => { if(!riderStats[d.rider]) riderStats[d.rider] = {omzet:0, porsi:0, trx:0, cash:0, qris:0}; riderStats[d.rider].omzet += Number(d.total); riderStats[d.rider].porsi += Number(d.qty); riderStats[d.rider].trx += 1; if(d.bayar==='Cash') riderStats[d.rider].cash += Number(d.total); if(d.bayar==='QRIS') riderStats[d.rider].qris += Number(d.total); });
+  
+  document.querySelector('#table-rider-perf tbody').innerHTML = Object.entries(riderStats).sort((a,b) => b[1].omzet - a[1].omzet).map(([r, s]) => `<tr><td><b>${r}</b></td><td>Rp ${s.cash.toLocaleString()}</td><td>Rp ${s.qris.toLocaleString()}</td><td>${s.porsi}</td><td>${s.trx}</td></tr>`).join('');
 
 // ====== DASHBOARD & CALENDAR ======
 function initCalendar(){
