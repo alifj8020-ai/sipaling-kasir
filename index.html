@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>SIPALING KASIR - BY DAW PROJECT</title>
+<title>POS SIPALING - DAW PROJECT</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <style>
@@ -155,14 +155,6 @@ body{background:#f5f5f5;color:#1a1a1a}
 .top3-name{font-weight:700;font-size:13px}
 .top3-detail{font-size:11px;color:#888}
 .setoran-readonly{width:100px;padding:8px 6px;text-align:right;font-weight:700;color:#333;background:#f5f5f5;border-radius:4px;font-size:14px}
-
-/* DETAIL MENU PER RIDER */
-.detail-rider-block{margin-bottom:16px}
-.detail-rider-block:last-child{margin-bottom:0}
-.detail-rider-name{font-weight:700;font-size:14px;color:#C41E3A;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
-.detail-rider-total{font-weight:400;color:#888;font-size:11px}
-.detail-rider-item{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px solid #f5f5f5}
-.detail-rider-item:last-child{border-bottom:none}
 
 /* EDITOR PANEL: MENU, RIDER, PENGELUARAN */
 .editor-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0f0f0}
@@ -325,11 +317,7 @@ body{background:#f5f5f5;color:#1a1a1a}
       </div>
       <div class="card">
         <div class="card-title" id="label-performa-rider">PERFORMA RIDER HARI INI</div>
-        <div style="overflow-x:auto"><table class="table" id="table-rider-perf"><thead><tr><th>Rider</th><th>Cash</th><th>QRIS</th><th>Porsi</th><th>Trx</th></tr></thead><tbody></tbody></table></div>
-      </div>
-      <div class="card">
-        <div class="card-title" id="label-detail-rider">DETAIL PENJUALAN PER RIDER - Hari Ini</div>
-        <div id="detail-menu-rider"></div>
+        <div style="overflow-x:auto"><table class="table" id="table-rider-perf"><thead><tr><th>Rider</th><th>Omzet</th><th>Porsi</th><th>Trx</th></tr></thead><tbody></tbody></table></div>
       </div>
       <div class="card">
         <div class="card-title" id="label-transaksi-terakhir">20 TRANSAKSI TERAKHIR</div>
@@ -471,7 +459,7 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
 // ====== KONFIGURASI ======
-const PIN_EDITOR = 'Alkjbb_567gtr125';
+const PIN_EDITOR = 'daw2026';
 const PIN_MITRA = 'mitra123';
 const PIN_RIDER = 'semangat123';
 const DEFAULT_RIDER = ['Budi','Joko','Andi','Rider 4','Rider 5','Rider 6','Rider 7','Rider 8','Rider 9','Rider 10'];
@@ -1161,10 +1149,16 @@ function getRiderStatsForDate(dateObj) {
     return dt.getDate() === dateObj.getDate() && dt.getMonth() === dateObj.getMonth() && dt.getFullYear() === dateObj.getFullYear(); 
   });
   
-  const riderStats = {};
-  dayData.forEach(d => { if(!riderStats[d.rider]) riderStats[d.rider] = {omzet:0, porsi:0, trx:0, cash:0, qris:0}; riderStats[d.rider].omzet += Number(d.total); riderStats[d.rider].porsi += Number(d.qty); riderStats[d.rider].trx += 1; if(d.bayar==='Cash') riderStats[d.rider].cash += Number(d.total); if(d.bayar==='QRIS') riderStats[d.rider].qris += Number(d.total); });
-  
-  document.querySelector('#table-rider-perf tbody').innerHTML = Object.entries(riderStats).sort((a,b) => b[1].omzet - a[1].omzet).map(([r, s]) => `<tr><td><b>${r}</b></td><td>Rp ${s.cash.toLocaleString()}</td><td>Rp ${s.qris.toLocaleString()}</td><td>${s.porsi}</td><td>${s.trx}</td></tr>`).join('');
+  const stats = {};
+  dayData.forEach(d => { 
+    if(!stats[d.rider]) stats[d.rider] = {omzet:0, porsi:0, trx:0, cash:0}; 
+    stats[d.rider].omzet += Number(d.total); 
+    stats[d.rider].porsi += Number(d.qty); 
+    stats[d.rider].trx += 1; 
+    if(d.bayar==='Cash') stats[d.rider].cash += Number(d.total); 
+  });
+  return stats;
+}
 
 // ====== DASHBOARD & CALENDAR ======
 function initCalendar(){
@@ -1196,53 +1190,18 @@ function updateDashboardToday(dateObj){
   document.getElementById('label-dash-menu-chart').textContent = labelTgl;
   document.getElementById('label-dash-top3').textContent = labelTgl;
   document.getElementById('label-performa-rider').textContent = `PERFORMA RIDER ${labelTgl.toUpperCase()}`;
-  document.getElementById('label-detail-rider').textContent = `DETAIL PENJUALAN PER RIDER - ${labelTgl}`;
   document.getElementById('label-transaksi-terakhir').textContent = `20 TRANSAKSI TERAKHIR (${labelTgl.toUpperCase()})`;
   document.getElementById('label-verifikasi-setoran').textContent = `💰 VERIFIKASI SETORAN CASH ${labelTgl.toUpperCase()}`;
   renderHourlyChart(dayData, 'dash-chart');
   renderDashMenuChart(dayData);
   renderDashTop3(dayData);
-  renderDetailMenuRider(dayData);
   
   const riderStats = {};
   dayData.forEach(d => { if(!riderStats[d.rider]) riderStats[d.rider] = {omzet:0, porsi:0, trx:0, cash:0}; riderStats[d.rider].omzet += Number(d.total); riderStats[d.rider].porsi += Number(d.qty); riderStats[d.rider].trx += 1; if(d.bayar==='Cash') riderStats[d.rider].cash += Number(d.total); });
   
- document.querySelector('#table-rider-perf tbody').innerHTML = Object.entries(riderStats).sort((a,b) => b[1].omzet - a[1].omzet).map(([r, s]) => `<tr><td><b>${r}</b></td><td>Rp ${s.cash.toLocaleString()}</td><td>Rp ${(s.qris||0).toLocaleString()}</td><td>${s.porsi}</td><td>${s.trx}</td></tr>`).join('');
+  document.querySelector('#table-rider-perf tbody').innerHTML = Object.entries(riderStats).sort((a,b) => b[1].omzet - a[1].omzet).map(([r, s]) => `<tr><td><b>${r}</b></td><td>Rp ${s.omzet.toLocaleString()}</td><td>${s.porsi}</td><td>${s.trx}</td></tr>`).join('');
   
   document.querySelector('#table-transaksi tbody').innerHTML = dayData.slice(-20).reverse().map(d=>`<tr><td>${d.waktu.split(' ')[1]}</td><td>${d.rider}</td><td>${d.menu}</td><td>Rp ${Number(d.total).toLocaleString('id-ID')}</td><td><span class="badge badge-${d.bayar.toLowerCase()}">${d.bayar}</span></td></tr>`).join('');
-}
-
-// Rincian menu + porsi per rider (dipakai di Dashboard Editor/Mitra)
-function renderDetailMenuRider(data){
-  const container = document.getElementById('detail-menu-rider');
-  const riderMenu = {};
-  data.forEach(d => {
-    const rider = d.rider;
-    const namaMenu = d.menu.replace(' + NASI', '');
-    if(!riderMenu[rider]) riderMenu[rider] = {};
-    riderMenu[rider][namaMenu] = (riderMenu[rider][namaMenu] || 0) + Number(d.qty);
-  });
-  const daftarRider = Object.keys(riderMenu);
-  if(daftarRider.length === 0){
-    container.innerHTML = '<div class="empty" style="padding:16px;font-size:12px">Tidak ada transaksi di tanggal ini</div>';
-    return;
-  }
-  daftarRider.sort((a, b) => {
-    const totalA = Object.values(riderMenu[a]).reduce((s, v) => s + v, 0);
-    const totalB = Object.values(riderMenu[b]).reduce((s, v) => s + v, 0);
-    return totalB - totalA;
-  });
-  container.innerHTML = daftarRider.map(rider => {
-    const items = Object.entries(riderMenu[rider]).sort((a, b) => b[1] - a[1]);
-    const totalPorsi = items.reduce((s, [, v]) => s + v, 0);
-    const itemsHtml = items.map(([menu, qty]) =>
-      `<div class="detail-rider-item"><span>${menu}</span><span style="font-weight:700">${qty} porsi</span></div>`
-    ).join('');
-    return `<div class="detail-rider-block">
-      <div class="detail-rider-name">${rider} <span class="detail-rider-total">${totalPorsi} porsi</span></div>
-      ${itemsHtml}
-    </div>`;
-  }).join('');
 }
 
 function renderVerifikasiSetoran(stats, dateObj){
