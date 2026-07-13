@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>SIPALING - DAW PROJECT</title>
+<title>POS SIPALING - DAW PROJECT</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif;-webkit-tap-highlight-color:transparent}
 body{background:#f5f5f5;color:#1a1a1a}
@@ -154,6 +156,14 @@ body{background:#f5f5f5;color:#1a1a1a}
 .top3-detail{font-size:11px;color:#888}
 .setoran-readonly{width:100px;padding:8px 6px;text-align:right;font-weight:700;color:#333;background:#f5f5f5;border-radius:4px;font-size:14px}
 
+/* DETAIL MENU PER RIDER */
+.detail-rider-block{margin-bottom:16px}
+.detail-rider-block:last-child{margin-bottom:0}
+.detail-rider-name{font-weight:700;font-size:14px;color:#C41E3A;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.detail-rider-total{font-weight:400;color:#888;font-size:11px}
+.detail-rider-item{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px solid #f5f5f5}
+.detail-rider-item:last-child{border-bottom:none}
+
 /* EDITOR PANEL: MENU, RIDER, PENGELUARAN */
 .editor-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0f0f0}
 .editor-row:last-child{border-bottom:none}
@@ -176,7 +186,7 @@ body{background:#f5f5f5;color:#1a1a1a}
     <div class="header">POS SIPALING<div class="sub">DAW PROJECT</div></div>
     <div class="login-box">
       <h2>Pilih Akses</h2>
-      <button class="btn btn-primary" onclick="pilihRole('rider')">🛵 Rider</button>
+      <button class="btn btn-primary" onclick="showPinModal('rider')">🛵 Rider</button>
       <button class="btn btn-outline" onclick="showPinModal('mitra')">📊 Mitra</button>
       <button class="btn btn-gray" onclick="showPinModal('editor')">🔐 Editor</button>
     </div>
@@ -318,6 +328,10 @@ body{background:#f5f5f5;color:#1a1a1a}
         <div style="overflow-x:auto"><table class="table" id="table-rider-perf"><thead><tr><th>Rider</th><th>Omzet</th><th>Porsi</th><th>Trx</th></tr></thead><tbody></tbody></table></div>
       </div>
       <div class="card">
+        <div class="card-title" id="label-detail-rider">DETAIL PENJUALAN PER RIDER - Hari Ini</div>
+        <div id="detail-menu-rider"></div>
+      </div>
+      <div class="card">
         <div class="card-title" id="label-transaksi-terakhir">20 TRANSAKSI TERAKHIR</div>
         <div style="overflow-x:auto"><table class="table" id="table-transaksi"><thead><tr><th>Jam</th><th>Rider</th><th>Menu</th><th>Total</th><th>Bayar</th></tr></thead><tbody></tbody></table></div>
       </div>
@@ -365,11 +379,6 @@ body{background:#f5f5f5;color:#1a1a1a}
           <div id="list-pengeluaran-editor"></div>
         </div>
 
-        <div class="card" style="border:1px solid #f5c6cb">
-          <div class="card-title" style="color:#C41E3A">🗑️ RESET DATA UJI COBA</div>
-          <p style="font-size:11px;color:#888;margin-bottom:8px">Hapus semua transaksi, setoran, dan pengeluaran pada tanggal yang sedang dipilih di atas (<b id="label-reset-tanggal">Hari Ini</b>) — dipakai untuk uji coba aplikasi. Tanggal lain tidak akan terpengaruh. Tindakan ini tidak bisa dibatalkan.</p>
-          <button class="btn btn-primary" style="background:#C41E3A" onclick="resetDataTanggal()">🗑️ Reset Data Tanggal Ini</button>
-        </div>
       </div>
 
       <button class="btn btn-green" onclick="exportExcel()">📥 Export Excel Semua Data</button>
@@ -381,7 +390,7 @@ body{background:#f5f5f5;color:#1a1a1a}
 <!-- MODAL PIN -->
 <div id="modal-pin" class="modal hidden"><div class="modal-content">
   <h3 id="pin-title">Masuk</h3>
-  <input type="password" class="input" id="pin-input" placeholder="Masukkan PIN">
+  <input type="password" class="input" id="pin-input" placeholder="Masukkan PIN" onkeydown="if(event.key==='Enter')cekPin()">
   <button class="btn btn-primary" onclick="cekPin()">Masuk</button>
   <button class="btn btn-gray" onclick="closeModal('modal-pin')">Batal</button>
 </div></div>
@@ -443,9 +452,23 @@ body{background:#f5f5f5;color:#1a1a1a}
 </div></div>
 
 <script>
+// ====== KONFIGURASI FIREBASE (DATABASE TERPUSAT REAL-TIME) ======
+const firebaseConfig = {
+  apiKey: "AIzaSyCVbm-uvnbQkhEF8YDJDc8ajD-gxFH5Rxo",
+  authDomain: "sipaling-kasir-by-daw-project.firebaseapp.com",
+  projectId: "sipaling-kasir-by-daw-project",
+  storageBucket: "sipaling-kasir-by-daw-project.firebasestorage.app",
+  messagingSenderId: "578763456330",
+  appId: "1:578763456330:web:6ae1c2d7ca0f1259810bb3",
+  measurementId: "G-CWQP6MCHY4"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
 // ====== KONFIGURASI ======
-const PIN_EDITOR = 'daw2026';
+const PIN_EDITOR = 'Alkjbb_567gtr125';
 const PIN_MITRA = 'mitra123';
+const PIN_RIDER = 'semangat123';
 const DEFAULT_RIDER = ['Budi','Joko','Andi','Rider 4','Rider 5','Rider 6','Rider 7','Rider 8','Rider 9','Rider 10'];
 const DEFAULT_MENU = [
 // NASI LENGKAP
@@ -489,12 +512,12 @@ const DEFAULT_MENU = [
 ];
 
 let APP = {rider:'',cart:[],menuAktif:null,qty:1,pakaiNasi:false,tabAktif:'NASI LENGKAP',role:''};
-let DB = JSON.parse(localStorage.getItem('sipaling_db')||'[]');
-let PENGELUARAN_DB = JSON.parse(localStorage.getItem('sipaling_pengeluaran')||'[]');
-let SETORAN_DB = JSON.parse(localStorage.getItem('sipaling_setoran')||'[]');
-let RIDER_DB = JSON.parse(localStorage.getItem('sipaling_riders')||'null') || [...DEFAULT_RIDER];
-let MENU_DB = JSON.parse(localStorage.getItem('sipaling_menu')||'null') || DEFAULT_MENU.map((m,i)=>({...m, id: i+1}));
-let nextMenuId = Math.max(0, ...MENU_DB.map(m=>m.id||0)) + 1;
+let DB = [];
+let PENGELUARAN_DB = [];
+let SETORAN_DB = [];
+let RIDER_DB = [...DEFAULT_RIDER];
+let MENU_DB = DEFAULT_MENU.map((m,i)=>({...m, id: i+1}));
+let nextMenuId = MENU_DB.length + 1;
 let currentCalDate = new Date();
 let totalBelanjaSaatIni = 0;
 let isCartExpanded = false;
@@ -505,14 +528,99 @@ let dashSelectedDate = new Date();
 window.onload = () => {
   renderRiderSelect();
   initCalendar();
+  setupFirestoreListeners();
 };
+
+// ====== LISTENER REAL-TIME FIRESTORE ======
+function refreshCurrentView(){
+  const pageKasir = document.getElementById('page-kasir');
+  const pageDash = document.getElementById('page-dashboard');
+  if(pageKasir && !pageKasir.classList.contains('hidden') && APP.rider){
+    updateRiderSummary();
+  }
+  if(pageDash && !pageDash.classList.contains('hidden')){
+    loadRekap();
+  }
+}
+
+function setupFirestoreListeners(){
+  // Menu (dokumen tunggal berisi array item)
+  db.collection('config').doc('menu').onSnapshot(doc => {
+    if(doc.exists && doc.data().items && doc.data().items.length){
+      MENU_DB = doc.data().items;
+      nextMenuId = Math.max(0, ...MENU_DB.map(m=>m.id||0)) + 1;
+    } else if(!doc.exists){
+      // Pertama kali dibuka: seed data default ke Firestore
+      db.collection('config').doc('menu').set({items: MENU_DB});
+    }
+    renderMenu();
+    const pageDash = document.getElementById('page-dashboard');
+    if(APP.role==='editor' && pageDash && !pageDash.classList.contains('hidden')) renderMenuEditor();
+  }, err => console.error('Menu listener error:', err));
+
+  // Rider (dokumen tunggal berisi array nama)
+  db.collection('config').doc('riders').onSnapshot(doc => {
+    if(doc.exists && doc.data().list && doc.data().list.length){
+      RIDER_DB = doc.data().list;
+    } else if(!doc.exists){
+      db.collection('config').doc('riders').set({list: RIDER_DB});
+    }
+    renderRiderSelect();
+    const pageDash = document.getElementById('page-dashboard');
+    if(APP.role==='editor' && pageDash && !pageDash.classList.contains('hidden')) renderRiderEditor();
+  }, err => console.error('Rider listener error:', err));
+
+  // Transaksi
+  db.collection('transaksi').orderBy('timestamp').onSnapshot(snap => {
+    DB = snap.docs.map(d => d.data());
+    refreshCurrentView();
+  }, err => console.error('Transaksi listener error:', err));
+
+  // Pengeluaran darurat
+  db.collection('pengeluaran').onSnapshot(snap => {
+    PENGELUARAN_DB = snap.docs.map(d => d.data());
+    refreshCurrentView();
+  }, err => console.error('Pengeluaran listener error:', err));
+
+  // Setoran
+  db.collection('setoran').onSnapshot(snap => {
+    SETORAN_DB = snap.docs.map(d => d.data());
+    refreshCurrentView();
+  }, err => console.error('Setoran listener error:', err));
+}
+
 function renderRiderSelect(){
   document.getElementById('rider-nama').innerHTML = RIDER_DB.map(r=>`<option>${r}</option>`).join('');
 }
 
 function pilihRole(role){if(role==='rider'){renderRiderSelect();showPage('rider')}}
-function showPinModal(role){APP.pinRole=role;document.getElementById('pin-title').textContent=`Masuk ${role==='editor'?'Editor':'Mitra'}`;document.getElementById('modal-pin').classList.remove('hidden');document.getElementById('pin-input').value=''}
-function cekPin(){const pin=document.getElementById('pin-input').value;const benar=APP.pinRole==='editor'?PIN_EDITOR:PIN_MITRA;if(pin===benar){APP.role=APP.pinRole;closeModal('modal-pin');loadDashboard()}else{alert('PIN salah!')}}
+function showPinModal(role){
+  APP.pinRole=role;
+  const judul = role==='editor' ? 'Editor' : (role==='rider' ? 'Rider' : 'Mitra');
+  document.getElementById('pin-title').textContent=`Masuk ${judul}`;
+  document.getElementById('modal-pin').classList.remove('hidden');
+  document.getElementById('pin-input').value='';
+  setTimeout(() => document.getElementById('pin-input').focus(), 100);
+}
+function cekPin(){
+  const pin=document.getElementById('pin-input').value;
+  let benar;
+  if(APP.pinRole==='editor') benar = PIN_EDITOR;
+  else if(APP.pinRole==='rider') benar = PIN_RIDER;
+  else benar = PIN_MITRA;
+
+  if(pin===benar){
+    closeModal('modal-pin');
+    if(APP.pinRole==='rider'){
+      pilihRole('rider');
+    } else {
+      APP.role=APP.pinRole;
+      loadDashboard();
+    }
+  } else {
+    alert('PIN salah!');
+  }
+}
 
 function mulaiJualan(){
   const nama=document.getElementById('rider-nama').value;
@@ -656,19 +764,23 @@ function resetMetodeBayar(){
 }
 function prosesBayar(metode){
   const waktu=new Date();
+  const batch = db.batch();
   APP.cart.forEach(item=>{
-    DB.push({
+    const ref = db.collection('transaksi').doc();
+    batch.set(ref, {
       waktu:waktu.toLocaleString('id-ID'), timestamp:waktu.getTime(), rider:APP.rider,
       menu:item.nama, qty:item.qty, harga:item.harga, total:item.total, bayar:metode
-    })
+    });
   });
-  localStorage.setItem('sipaling_db',JSON.stringify(DB));
-  alert('Transaksi berhasil!\nTotal: Rp '+totalBelanjaSaatIni.toLocaleString('id-ID'));
-  APP.cart=[];renderCart();
-  resetKeHariIni(); 
-  updateRiderSummary();
-  closeModal('modal-bayar');
-  if(isCartExpanded) toggleCartDetail();
+  batch.commit().then(() => {
+    alert('Transaksi berhasil!\nTotal: Rp '+totalBelanjaSaatIni.toLocaleString('id-ID'));
+    APP.cart=[];renderCart();
+    resetKeHariIni();
+    closeModal('modal-bayar');
+    if(isCartExpanded) toggleCartDetail();
+  }).catch(err => {
+    alert('Gagal menyimpan transaksi (cek koneksi internet): '+err.message);
+  });
 }
 
 // ====== LOGIKA PENGELUARAN DARURAT ======
@@ -681,18 +793,17 @@ function simpanPengeluaran(){
   const nominal = parseInt(document.getElementById('pengeluaran-nominal').value);
   const ket = document.getElementById('pengeluaran-keterangan').value;
   if(!nominal || !ket) return alert('Isi nominal dan keterangan!');
-  
-  PENGELUARAN_DB.push({
+  const ts = new Date().getTime();
+  db.collection('pengeluaran').doc(String(ts)).set({
     rider: APP.rider,
     tanggal: new Date().toISOString().split('T')[0], // Format YYYY-MM-DD
     nominal: nominal,
     keterangan: ket,
-    timestamp: new Date().getTime()
-  });
-  localStorage.setItem('sipaling_pengeluaran', JSON.stringify(PENGELUARAN_DB));
-  alert('Pengeluaran berhasil dicatat!');
-  closeModal('modal-pengeluaran');
-  updateRiderSummary();
+    timestamp: ts
+  }).then(() => {
+    alert('Pengeluaran berhasil dicatat!');
+    closeModal('modal-pengeluaran');
+  }).catch(err => alert('Gagal menyimpan (cek koneksi internet): '+err.message));
 }
 
 // ====== LOGIKA EDITOR: KELOLA MENU & HARGA ======
@@ -718,33 +829,31 @@ function simpanEditMenu(id){
   const nama = document.getElementById(`menu-edit-nama-${id}`).value.trim();
   const harga = parseInt(document.getElementById(`menu-edit-harga-${id}`).value);
   if(!nama || !harga) return alert('Isi nama dan harga menu!');
-  const item = MENU_DB.find(m=>m.id===id);
-  if(!item) return;
-  item.nama = nama; item.harga = harga;
-  localStorage.setItem('sipaling_menu', JSON.stringify(MENU_DB));
-  alert('Menu berhasil diperbarui!');
-  renderMenuEditor();
+  const updated = MENU_DB.map(m => m.id===id ? {...m, nama, harga} : m);
+  db.collection('config').doc('menu').set({items: updated})
+    .then(() => alert('Menu berhasil diperbarui!'))
+    .catch(err => alert('Gagal menyimpan (cek koneksi internet): '+err.message));
 }
 function hapusMenuItem(id){
   const item = MENU_DB.find(m=>m.id===id);
   if(!item) return;
   if(!confirm(`Hapus menu "${item.nama}"?`)) return;
-  MENU_DB = MENU_DB.filter(m=>m.id!==id);
-  localStorage.setItem('sipaling_menu', JSON.stringify(MENU_DB));
-  renderMenuEditor();
+  const updated = MENU_DB.filter(m=>m.id!==id);
+  db.collection('config').doc('menu').set({items: updated})
+    .catch(err => alert('Gagal menghapus (cek koneksi internet): '+err.message));
 }
 function tambahMenuItem(){
   const nama = document.getElementById('new-menu-nama').value.trim();
   const kategori = document.getElementById('new-menu-kategori').value;
   const harga = parseInt(document.getElementById('new-menu-harga').value);
   if(!nama || !harga) return alert('Isi nama dan harga menu!');
-  MENU_DB.push({id: nextMenuId++, nama, kategori, harga});
-  localStorage.setItem('sipaling_menu', JSON.stringify(MENU_DB));
-  document.getElementById('new-menu-nama').value='';
-  document.getElementById('new-menu-harga').value='';
-  document.getElementById('filter-kat-menu').value = kategori;
-  alert('Menu baru berhasil ditambahkan!');
-  renderMenuEditor();
+  const updated = [...MENU_DB, {id: nextMenuId++, nama, kategori, harga}];
+  db.collection('config').doc('menu').set({items: updated}).then(() => {
+    document.getElementById('new-menu-nama').value='';
+    document.getElementById('new-menu-harga').value='';
+    document.getElementById('filter-kat-menu').value = kategori;
+    alert('Menu baru berhasil ditambahkan!');
+  }).catch(err => alert('Gagal menyimpan (cek koneksi internet): '+err.message));
 }
 
 // ====== LOGIKA EDITOR: KELOLA RIDER ======
@@ -764,19 +873,17 @@ function tambahRider(){
   const nama = document.getElementById('new-rider-nama').value.trim();
   if(!nama) return alert('Isi nama rider!');
   if(RIDER_DB.includes(nama)) return alert('Nama rider sudah ada!');
-  RIDER_DB.push(nama);
-  localStorage.setItem('sipaling_riders', JSON.stringify(RIDER_DB));
-  document.getElementById('new-rider-nama').value='';
-  renderRiderSelect();
-  renderRiderEditor();
+  const updated = [...RIDER_DB, nama];
+  db.collection('config').doc('riders').set({list: updated}).then(() => {
+    document.getElementById('new-rider-nama').value='';
+  }).catch(err => alert('Gagal menyimpan (cek koneksi internet): '+err.message));
 }
 function hapusRider(idx){
   const nama = RIDER_DB[idx];
   if(!confirm(`Hapus rider "${nama}"? Data transaksi lama rider ini tetap tersimpan di rekap.`)) return;
-  RIDER_DB.splice(idx,1);
-  localStorage.setItem('sipaling_riders', JSON.stringify(RIDER_DB));
-  renderRiderSelect();
-  renderRiderEditor();
+  const updated = RIDER_DB.filter((_,i)=>i!==idx);
+  db.collection('config').doc('riders').set({list: updated})
+    .catch(err => alert('Gagal menghapus (cek koneksi internet): '+err.message));
 }
 
 // ====== LOGIKA EDITOR: EDIT/HAPUS PENGELUARAN DARURAT ======
@@ -805,20 +912,14 @@ function simpanEditPengeluaran(ts){
   const nominal = parseInt(document.getElementById(`pengeluaran-edit-nominal-${ts}`).value);
   const ket = document.getElementById(`pengeluaran-edit-ket-${ts}`).value.trim();
   if(!nominal || !ket) return alert('Isi nominal dan keterangan!');
-  const item = PENGELUARAN_DB.find(p=>p.timestamp===ts);
-  if(!item) return;
-  item.nominal = nominal; item.keterangan = ket;
-  localStorage.setItem('sipaling_pengeluaran', JSON.stringify(PENGELUARAN_DB));
-  alert('Pengeluaran berhasil diperbarui!');
-  renderPengeluaranEditor();
-  loadRekap();
+  db.collection('pengeluaran').doc(String(ts)).update({nominal, keterangan: ket})
+    .then(() => alert('Pengeluaran berhasil diperbarui!'))
+    .catch(err => alert('Gagal menyimpan (cek koneksi internet): '+err.message));
 }
 function hapusPengeluaran(ts){
   if(!confirm('Hapus catatan pengeluaran ini?')) return;
-  PENGELUARAN_DB = PENGELUARAN_DB.filter(p=>p.timestamp!==ts);
-  localStorage.setItem('sipaling_pengeluaran', JSON.stringify(PENGELUARAN_DB));
-  renderPengeluaranEditor();
-  loadRekap();
+  db.collection('pengeluaran').doc(String(ts)).delete()
+    .catch(err => alert('Gagal menghapus (cek koneksi internet): '+err.message));
 }
 
 // ====== LOGIKA EDITOR: RESET DATA UJI COBA (PER TANGGAL) - DILINDUNGI PIN ======
@@ -858,17 +959,23 @@ function konfirmasiResetData(){
   const tglStr = dashSelectedDate.toISOString().split('T')[0];
   const labelTgl = dashSelectedDate.toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' });
 
-  DB = DB.filter(d => !isTanggalSamaDenganDash(d.timestamp));
-  PENGELUARAN_DB = PENGELUARAN_DB.filter(p => p.tanggal !== tglStr);
-  SETORAN_DB = SETORAN_DB.filter(s => s.tanggal !== tglStr);
+  const awalHari = new Date(dashSelectedDate); awalHari.setHours(0,0,0,0);
+  const akhirHari = new Date(dashSelectedDate); akhirHari.setHours(23,59,59,999);
 
-  localStorage.setItem('sipaling_db', JSON.stringify(DB));
-  localStorage.setItem('sipaling_pengeluaran', JSON.stringify(PENGELUARAN_DB));
-  localStorage.setItem('sipaling_setoran', JSON.stringify(SETORAN_DB));
-
-  closeModal('modal-reset-pin');
-  alert(`Data tanggal ${labelTgl} berhasil direset.`);
-  loadRekap();
+  Promise.all([
+    db.collection('transaksi').where('timestamp','>=',awalHari.getTime()).where('timestamp','<=',akhirHari.getTime()).get(),
+    db.collection('pengeluaran').where('tanggal','==',tglStr).get(),
+    db.collection('setoran').where('tanggal','==',tglStr).get()
+  ]).then(([trxSnap, pengSnap, setSnap]) => {
+    const batch = db.batch();
+    trxSnap.forEach(d => batch.delete(d.ref));
+    pengSnap.forEach(d => batch.delete(d.ref));
+    setSnap.forEach(d => batch.delete(d.ref));
+    return batch.commit();
+  }).then(() => {
+    closeModal('modal-reset-pin');
+    alert(`Data tanggal ${labelTgl} berhasil direset.`);
+  }).catch(err => alert('Gagal reset (cek koneksi internet): '+err.message));
 }
 
 // ====== LOGIKA DATA & GRAFIK ======
@@ -1090,11 +1197,13 @@ function updateDashboardToday(dateObj){
   document.getElementById('label-dash-menu-chart').textContent = labelTgl;
   document.getElementById('label-dash-top3').textContent = labelTgl;
   document.getElementById('label-performa-rider').textContent = `PERFORMA RIDER ${labelTgl.toUpperCase()}`;
+  document.getElementById('label-detail-rider').textContent = `DETAIL PENJUALAN PER RIDER - ${labelTgl}`;
   document.getElementById('label-transaksi-terakhir').textContent = `20 TRANSAKSI TERAKHIR (${labelTgl.toUpperCase()})`;
   document.getElementById('label-verifikasi-setoran').textContent = `💰 VERIFIKASI SETORAN CASH ${labelTgl.toUpperCase()}`;
   renderHourlyChart(dayData, 'dash-chart');
   renderDashMenuChart(dayData);
   renderDashTop3(dayData);
+  renderDetailMenuRider(dayData);
   
   const riderStats = {};
   dayData.forEach(d => { if(!riderStats[d.rider]) riderStats[d.rider] = {omzet:0, porsi:0, trx:0, cash:0}; riderStats[d.rider].omzet += Number(d.total); riderStats[d.rider].porsi += Number(d.qty); riderStats[d.rider].trx += 1; if(d.bayar==='Cash') riderStats[d.rider].cash += Number(d.total); });
@@ -1102,6 +1211,39 @@ function updateDashboardToday(dateObj){
   document.querySelector('#table-rider-perf tbody').innerHTML = Object.entries(riderStats).sort((a,b) => b[1].omzet - a[1].omzet).map(([r, s]) => `<tr><td><b>${r}</b></td><td>Rp ${s.omzet.toLocaleString()}</td><td>${s.porsi}</td><td>${s.trx}</td></tr>`).join('');
   
   document.querySelector('#table-transaksi tbody').innerHTML = dayData.slice(-20).reverse().map(d=>`<tr><td>${d.waktu.split(' ')[1]}</td><td>${d.rider}</td><td>${d.menu}</td><td>Rp ${Number(d.total).toLocaleString('id-ID')}</td><td><span class="badge badge-${d.bayar.toLowerCase()}">${d.bayar}</span></td></tr>`).join('');
+}
+
+// Rincian menu + porsi per rider (dipakai di Dashboard Editor/Mitra)
+function renderDetailMenuRider(data){
+  const container = document.getElementById('detail-menu-rider');
+  const riderMenu = {};
+  data.forEach(d => {
+    const rider = d.rider;
+    const namaMenu = d.menu.replace(' + NASI', '');
+    if(!riderMenu[rider]) riderMenu[rider] = {};
+    riderMenu[rider][namaMenu] = (riderMenu[rider][namaMenu] || 0) + Number(d.qty);
+  });
+  const daftarRider = Object.keys(riderMenu);
+  if(daftarRider.length === 0){
+    container.innerHTML = '<div class="empty" style="padding:16px;font-size:12px">Tidak ada transaksi di tanggal ini</div>';
+    return;
+  }
+  daftarRider.sort((a, b) => {
+    const totalA = Object.values(riderMenu[a]).reduce((s, v) => s + v, 0);
+    const totalB = Object.values(riderMenu[b]).reduce((s, v) => s + v, 0);
+    return totalB - totalA;
+  });
+  container.innerHTML = daftarRider.map(rider => {
+    const items = Object.entries(riderMenu[rider]).sort((a, b) => b[1] - a[1]);
+    const totalPorsi = items.reduce((s, [, v]) => s + v, 0);
+    const itemsHtml = items.map(([menu, qty]) =>
+      `<div class="detail-rider-item"><span>${menu}</span><span style="font-weight:700">${qty} porsi</span></div>`
+    ).join('');
+    return `<div class="detail-rider-block">
+      <div class="detail-rider-name">${rider} <span class="detail-rider-total">${totalPorsi} porsi</span></div>
+      ${itemsHtml}
+    </div>`;
+  }).join('');
 }
 
 function renderVerifikasiSetoran(stats, dateObj){
@@ -1160,19 +1302,17 @@ function renderVerifikasiSetoran(stats, dateObj){
 
 function simpanSetoran(rider, nominal, tglStr){
   const targetTgl = tglStr || new Date().toISOString().split('T')[0];
-  // Hapus data lama rider ini di tanggal yang sama
-  SETORAN_DB = SETORAN_DB.filter(s => !(s.rider === rider && s.tanggal === targetTgl));
-  
+  const docId = `${rider}__${targetTgl}`;
   if(nominal && nominal > 0){
-    SETORAN_DB.push({
+    db.collection('setoran').doc(docId).set({
       rider: rider,
       tanggal: targetTgl,
       nominal: parseInt(nominal),
       timestamp: new Date().getTime()
-    });
+    }).catch(err => alert('Gagal menyimpan (cek koneksi internet): '+err.message));
+  } else {
+    db.collection('setoran').doc(docId).delete().catch(()=>{});
   }
-  localStorage.setItem('sipaling_setoran', JSON.stringify(SETORAN_DB));
-  loadRekap(); // Refresh tampilan dashboard
 }
 
 function renderHourlyChart(data, cid){
@@ -1244,7 +1384,6 @@ function loadDashboard(){
 function exportExcel(){
   let csv='Waktu,Rider,Menu,Qty,Harga,Total,Bayar\n'; DB.forEach(d=>{csv+=`"${d.waktu}","${d.rider}","${d.menu}",${d.qty},${d.harga},${d.total},"${d.bayar}"\n`});
   const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`rekap_sipaling_${new Date().toISOString().slice(0,10)}.csv`; a.click(); alert('File Excel berhasil di-download!')
-
 }
 function showPage(p){ document.querySelectorAll('[id^="page-"]').forEach(p=>p.classList.add('hidden')); document.getElementById('page-'+p).classList.remove('hidden') }
 function closeModal(id){ document.getElementById(id).classList.add('hidden') }
