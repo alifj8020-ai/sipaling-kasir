@@ -1207,7 +1207,7 @@ function updateDashboardToday(dateObj){
   const riderStats = {};
   dayData.forEach(d => { if(!riderStats[d.rider]) riderStats[d.rider] = {omzet:0, porsi:0, trx:0, cash:0}; riderStats[d.rider].omzet += Number(d.total); riderStats[d.rider].porsi += Number(d.qty); riderStats[d.rider].trx += 1; if(d.bayar==='Cash') riderStats[d.rider].cash += Number(d.total); });
   
-  document.querySelector('#table-rider-perf tbody').innerHTML = Object.entries(riderStats).sort((a,b) => b[1].omzet - a[1].omzet).map(([r, s]) => `<tr><td><b>${r}</b></td><td>Rp ${s.omzet.toLocaleString()}</td><td>${s.porsi}</td><td>${s.trx}</td></tr>`).join('');
+ document.querySelector('#table-rider-perf tbody').innerHTML = Object.entries(riderStats).sort((a,b) => b[1].omzet - a[1].omzet).map(([r, s]) => `<tr><td><b>${r}</b></td><td>Rp ${s.cash.toLocaleString()}</td><td>Rp ${(s.qris||0).toLocaleString()}</td><td>${s.porsi}</td><td>${s.trx}</td></tr>`).join('');
   
   document.querySelector('#table-transaksi tbody').innerHTML = dayData.slice(-20).reverse().map(d=>`<tr><td>${d.waktu.split(' ')[1]}</td><td>${d.rider}</td><td>${d.menu}</td><td>Rp ${Number(d.total).toLocaleString('id-ID')}</td><td><span class="badge badge-${d.bayar.toLowerCase()}">${d.bayar}</span></td></tr>`).join('');
 }
