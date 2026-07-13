@@ -1244,6 +1244,7 @@ function loadDashboard(){
 function exportExcel(){
   let csv='Waktu,Rider,Menu,Qty,Harga,Total,Bayar\n'; DB.forEach(d=>{csv+=`"${d.waktu}","${d.rider}","${d.menu}",${d.qty},${d.harga},${d.total},"${d.bayar}"\n`});
   const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`rekap_sipaling_${new Date().toISOString().slice(0,10)}.csv`; a.click(); alert('File Excel berhasil di-download!')
+
 }
 function showPage(p){ document.querySelectorAll('[id^="page-"]').forEach(p=>p.classList.add('hidden')); document.getElementById('page-'+p).classList.remove('hidden') }
 function closeModal(id){ document.getElementById(id).classList.add('hidden') }
