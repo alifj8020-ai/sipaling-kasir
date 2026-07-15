@@ -186,7 +186,7 @@ body{background:#f5f5f5;color:#1a1a1a}
     <div class="header">POS SIPALING<div class="sub">DAW PROJECT</div></div>
     <div class="login-box">
       <h2>Pilih Akses</h2>
-      <button class="btn btn-primary" onclick="showPinModal('rider')">🛵 Rider</button>
+      <button class="btn btn-primary" onclick="pilihRole('rider')">🛵 Rider</button>
       <button class="btn btn-outline" onclick="showPinModal('mitra')">📊 Mitra</button>
       <button class="btn btn-gray" onclick="showPinModal('editor')">🔐 Editor</button>
     </div>
@@ -325,7 +325,7 @@ body{background:#f5f5f5;color:#1a1a1a}
       </div>
       <div class="card">
         <div class="card-title" id="label-performa-rider">PERFORMA RIDER HARI INI</div>
-        <div style="overflow-x:auto"><table class="table" id="table-rider-perf"><thead><tr><th>Rider</th><th>Omzet</th><th>Porsi</th><th>Trx</th></tr></thead><tbody></tbody></table></div>
+        <div style="overflow-x:auto"><table class="table" id="table-rider-perf"><thead><tr><th>Rider</th><th>Cash</th><th>QRIS</th><th>Porsi</th><th>Trx</th></tr></thead><tbody></tbody></table></div>
       </div>
       <div class="card">
         <div class="card-title" id="label-detail-rider">DETAIL PENJUALAN PER RIDER - Hari Ini</div>
@@ -369,6 +369,7 @@ body{background:#f5f5f5;color:#1a1a1a}
           <div style="border-top:1px dashed #ddd;margin-top:12px;padding-top:12px">
             <div style="font-size:12px;color:#888;margin-bottom:6px">+ Tambah Rider Baru</div>
             <input type="text" class="input" id="new-rider-nama" placeholder="Nama rider">
+            <input type="text" class="input" id="new-rider-pin" placeholder="PIN rider (misal 4 digit)">
             <button class="btn btn-primary" onclick="tambahRider()">+ Tambah Rider</button>
           </div>
         </div>
@@ -468,8 +469,29 @@ const db = firebase.firestore();
 // ====== KONFIGURASI ======
 const PIN_EDITOR = 'Alkjbb_567gtr125';
 const PIN_MITRA = 'mitra123';
-const PIN_RIDER = 'semangat123';
-const DEFAULT_RIDER = ['Bk02 Rival','Bk03 Rusmin','Bk04 Ade','Bk05 Ita','Bk06','Rider 6','Rider 7','Rider 8','Rider 9','Rider 10'];
+const DEFAULT_RIDER = [
+  {nama:'Heru', pin:'1001'},
+  {nama:'Rival', pin:'1002'},
+  {nama:'Rusmin', pin:'1003'},
+  {nama:'Ade', pin:'1004'},
+  {nama:'Ita', pin:'1005'},
+  {nama:'Indra', pin:'1006'},
+  {nama:'Ismail', pin:'1007'},
+  {nama:'Rehan', pin:'1008'},
+  {nama:'Angga', pin:'1009'},
+  {nama:'Kumala', pin:'1010'},
+  {nama:'Lukman', pin:'1011'},
+  {nama:'Rafly', pin:'1012'},
+  {nama:'Agus', pin:'1013'},
+  {nama:'Risky', pin:'1014'},
+  {nama:'Rizal', pin:'1015'},
+  {nama:'Hermawan', pin:'1016'},
+  {nama:'Roni', pin:'1017'},
+  {nama:'Imam', pin:'1018'},
+  {nama:'Madalih', pin:'1019'},
+  {nama:'Eka', pin:'1020'},
+  {nama:'Fandi', pin:'1021'}
+];
 const DEFAULT_MENU = [
 // NASI LENGKAP
 {nama:'NASI TELUR DADAR',kategori:'NASI LENGKAP',harga:16000},
@@ -561,7 +583,14 @@ function setupFirestoreListeners(){
   // Rider (dokumen tunggal berisi array nama)
   db.collection('config').doc('riders').onSnapshot(doc => {
     if(doc.exists && doc.data().list && doc.data().list.length){
-      RIDER_DB = doc.data().list;
+      let list = doc.data().list;
+      if(typeof list[0] === 'string'){
+        // Migrasi otomatis dari format lama (nama saja) ke format baru (nama + PIN default)
+        list = list.map((nama, idx) => ({nama, pin: String(1001+idx)}));
+        db.collection('config').doc('riders').set({list});
+        return;
+      }
+      RIDER_DB = list;
     } else if(!doc.exists){
       db.collection('config').doc('riders').set({list: RIDER_DB});
     }
@@ -590,33 +619,48 @@ function setupFirestoreListeners(){
 }
 
 function renderRiderSelect(){
-  document.getElementById('rider-nama').innerHTML = RIDER_DB.map(r=>`<option>${r}</option>`).join('');
+  document.getElementById('rider-nama').innerHTML = RIDER_DB.map(r=>`<option value="${r.nama}">${r.nama}</option>`).join('');
 }
 
 function pilihRole(role){if(role==='rider'){renderRiderSelect();showPage('rider')}}
 function showPinModal(role){
   APP.pinRole=role;
-  const judul = role==='editor' ? 'Editor' : (role==='rider' ? 'Rider' : 'Mitra');
+  const judul = role==='editor' ? 'Editor' : 'Mitra';
   document.getElementById('pin-title').textContent=`Masuk ${judul}`;
+  document.getElementById('modal-pin').classList.remove('hidden');
+  document.getElementById('pin-input').value='';
+  setTimeout(() => document.getElementById('pin-input').focus(), 100);
+}
+function showPinModalRider(nama){
+  APP.pinRole='rider-personal';
+  APP.pendingRiderNama=nama;
+  document.getElementById('pin-title').textContent=`Masukkan PIN - ${nama}`;
   document.getElementById('modal-pin').classList.remove('hidden');
   document.getElementById('pin-input').value='';
   setTimeout(() => document.getElementById('pin-input').focus(), 100);
 }
 function cekPin(){
   const pin=document.getElementById('pin-input').value;
+
+  if(APP.pinRole==='rider-personal'){
+    const riderObj = RIDER_DB.find(r=>r.nama===APP.pendingRiderNama);
+    if(riderObj && pin===riderObj.pin){
+      closeModal('modal-pin');
+      lanjutkanMulaiJualan(APP.pendingRiderNama);
+    } else {
+      alert('PIN salah! Pastikan kamu memasukkan PIN milikmu sendiri.');
+    }
+    return;
+  }
+
   let benar;
   if(APP.pinRole==='editor') benar = PIN_EDITOR;
-  else if(APP.pinRole==='rider') benar = PIN_RIDER;
   else benar = PIN_MITRA;
 
   if(pin===benar){
     closeModal('modal-pin');
-    if(APP.pinRole==='rider'){
-      pilihRole('rider');
-    } else {
-      APP.role=APP.pinRole;
-      loadDashboard();
-    }
+    APP.role=APP.pinRole;
+    loadDashboard();
   } else {
     alert('PIN salah!');
   }
@@ -625,6 +669,9 @@ function cekPin(){
 function mulaiJualan(){
   const nama=document.getElementById('rider-nama').value;
   if(!nama)return alert('Pilih nama rider');
+  showPinModalRider(nama);
+}
+function lanjutkanMulaiJualan(nama){
   APP.rider=nama;APP.role='rider';
   document.getElementById('kasir-title').textContent=nama;
   selectedViewDate = new Date();
@@ -861,25 +908,40 @@ function renderRiderEditor(){
   const container = document.getElementById('list-rider-editor');
   if(RIDER_DB.length===0){ container.innerHTML = '<div class="empty" style="padding:16px;font-size:12px">Belum ada rider</div>'; return; }
   container.innerHTML = RIDER_DB.map((r,idx)=>`
-    <div class="setoran-row">
-      <div class="setoran-info"><div class="setoran-name">${r}</div></div>
-      <div class="setoran-actions">
-        <span class="cart-item-del" onclick="hapusRider(${idx})">✕</span>
+    <div class="setoran-row" style="flex-wrap:wrap">
+      <div style="display:flex;gap:6px;width:100%">
+        <input type="text" class="input" style="margin:4px 0;padding:8px;font-size:13px" value="${r.nama}" id="rider-edit-nama-${idx}">
+        <input type="text" class="input" style="margin:4px 0;padding:8px;font-size:13px;max-width:90px" value="${r.pin}" id="rider-edit-pin-${idx}" placeholder="PIN">
+      </div>
+      <div style="display:flex;gap:8px;width:100%">
+        <button class="btn btn-green" style="margin:0;padding:8px;font-size:12px" onclick="simpanEditRider(${idx})">Simpan</button>
+        <button class="btn btn-gray" style="margin:0;padding:8px;font-size:12px" onclick="hapusRider(${idx})">Hapus</button>
       </div>
     </div>
   `).join('');
 }
+function simpanEditRider(idx){
+  const nama = document.getElementById(`rider-edit-nama-${idx}`).value.trim();
+  const pin = document.getElementById(`rider-edit-pin-${idx}`).value.trim();
+  if(!nama || !pin) return alert('Isi nama dan PIN rider!');
+  const updated = RIDER_DB.map((r,i)=> i===idx ? {nama, pin} : r);
+  db.collection('config').doc('riders').set({list: updated})
+    .then(() => alert('Rider berhasil diperbarui!'))
+    .catch(err => alert('Gagal menyimpan (cek koneksi internet): '+err.message));
+}
 function tambahRider(){
   const nama = document.getElementById('new-rider-nama').value.trim();
-  if(!nama) return alert('Isi nama rider!');
-  if(RIDER_DB.includes(nama)) return alert('Nama rider sudah ada!');
-  const updated = [...RIDER_DB, nama];
+  const pin = document.getElementById('new-rider-pin').value.trim();
+  if(!nama || !pin) return alert('Isi nama dan PIN rider!');
+  if(RIDER_DB.some(r=>r.nama===nama)) return alert('Nama rider sudah ada!');
+  const updated = [...RIDER_DB, {nama, pin}];
   db.collection('config').doc('riders').set({list: updated}).then(() => {
     document.getElementById('new-rider-nama').value='';
+    document.getElementById('new-rider-pin').value='';
   }).catch(err => alert('Gagal menyimpan (cek koneksi internet): '+err.message));
 }
 function hapusRider(idx){
-  const nama = RIDER_DB[idx];
+  const nama = RIDER_DB[idx].nama;
   if(!confirm(`Hapus rider "${nama}"? Data transaksi lama rider ini tetap tersimpan di rekap.`)) return;
   const updated = RIDER_DB.filter((_,i)=>i!==idx);
   db.collection('config').doc('riders').set({list: updated})
@@ -1206,9 +1268,9 @@ function updateDashboardToday(dateObj){
   renderDetailMenuRider(dayData);
   
   const riderStats = {};
-  dayData.forEach(d => { if(!riderStats[d.rider]) riderStats[d.rider] = {omzet:0, porsi:0, trx:0, cash:0}; riderStats[d.rider].omzet += Number(d.total); riderStats[d.rider].porsi += Number(d.qty); riderStats[d.rider].trx += 1; if(d.bayar==='Cash') riderStats[d.rider].cash += Number(d.total); });
+  dayData.forEach(d => { if(!riderStats[d.rider]) riderStats[d.rider] = {omzet:0, porsi:0, trx:0, cash:0, qris:0}; riderStats[d.rider].omzet += Number(d.total); riderStats[d.rider].porsi += Number(d.qty); riderStats[d.rider].trx += 1; if(d.bayar==='Cash') riderStats[d.rider].cash += Number(d.total); if(d.bayar==='QRIS') riderStats[d.rider].qris += Number(d.total); });
   
-  document.querySelector('#table-rider-perf tbody').innerHTML = Object.entries(riderStats).sort((a,b) => b[1].omzet - a[1].omzet).map(([r, s]) => `<tr><td><b>${r}</b></td><td>Rp ${s.omzet.toLocaleString()}</td><td>${s.porsi}</td><td>${s.trx}</td></tr>`).join('');
+  document.querySelector('#table-rider-perf tbody').innerHTML = Object.entries(riderStats).sort((a,b) => b[1].omzet - a[1].omzet).map(([r, s]) => `<tr><td><b>${r}</b></td><td>Rp ${s.cash.toLocaleString()}</td><td>Rp ${s.qris.toLocaleString()}</td><td>${s.porsi}</td><td>${s.trx}</td></tr>`).join('');
   
   document.querySelector('#table-transaksi tbody').innerHTML = dayData.slice(-20).reverse().map(d=>`<tr><td>${d.waktu.split(' ')[1]}</td><td>${d.rider}</td><td>${d.menu}</td><td>Rp ${Number(d.total).toLocaleString('id-ID')}</td><td><span class="badge badge-${d.bayar.toLowerCase()}">${d.bayar}</span></td></tr>`).join('');
 }
