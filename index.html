@@ -325,7 +325,7 @@ body{background:#f5f5f5;color:#1a1a1a}
       </div>
       <div class="card">
         <div class="card-title" id="label-performa-rider">PERFORMA RIDER HARI INI</div>
-        <div style="overflow-x:auto"><table class="table" id="table-rider-perf"><thead><tr><th>Rider</th><th>Cash</th><th>QRIS</th><th>Porsi</th><th>Trx</th></tr></thead><tbody></tbody></table></div>
+        <div style="overflow-x:auto"><table class="table" id="table-rider-perf"><thead><tr><th>Rider</th><th>Cash</th><th>QRIS</th><th>Total Penjualan</th><th>Porsi</th><th>Trx</th></tr></thead><tbody></tbody></table></div>
       </div>
       <div class="card">
         <div class="card-title" id="label-detail-rider">DETAIL PENJUALAN PER RIDER - Hari Ini</div>
@@ -378,6 +378,13 @@ body{background:#f5f5f5;color:#1a1a1a}
           <div class="card-title">⚙️ EDIT PENGELUARAN DARURAT - <span id="label-editor-pengeluaran">Hari Ini</span></div>
           <p style="font-size:11px;color:#888;margin-bottom:8px">Perbaiki catatan pengeluaran darurat rider jika salah ketik nominal atau keterangan.</p>
           <div id="list-pengeluaran-editor"></div>
+        </div>
+
+        <div class="card" style="border:1px solid #f5c6cb">
+          <div class="card-title" style="color:#C41E3A">🗑️ RESET DATA PENJUALAN PER RIDER (SIMULASI)</div>
+          <p style="font-size:11px;color:#888;margin-bottom:8px">Hapus semua transaksi, pengeluaran darurat, dan setoran milik satu rider (di semua tanggal) — dipakai selama masa uji coba aplikasi. Data rider lain tidak akan terpengaruh. Tindakan ini tidak bisa dibatalkan.</p>
+          <select class="select" id="reset-rider-select"></select>
+          <button class="btn btn-primary" style="background:#C41E3A" onclick="resetDataRider()">🗑️ Reset Data Rider Ini</button>
         </div>
 
       </div>
@@ -449,7 +456,7 @@ body{background:#f5f5f5;color:#1a1a1a}
   <p style="font-size:12px;color:#666;margin-bottom:12px" id="reset-pin-detail"></p>
   <input type="password" class="input" id="reset-pin-input" placeholder="Masukkan PIN Editor" onkeydown="if(event.key==='Enter')konfirmasiResetData()">
   <button class="btn btn-primary" style="background:#C41E3A" onclick="konfirmasiResetData()">Ya, Hapus Data Ini</button>
-  <button class="btn btn-gray" onclick="closeModal('modal-reset-pin')">Batal</button>
+  <button class="btn btn-gray" onclick="pendingResetTarget=null;closeModal('modal-reset-pin')">Batal</button>
 </div></div>
 
 <script>
@@ -546,6 +553,7 @@ let isCartExpanded = false;
 let selectedViewDate = new Date();
 let rekapView = 'harian';
 let dashSelectedDate = new Date();
+let pendingResetTarget = null;
 
 window.onload = () => {
   renderRiderSelect();
@@ -919,6 +927,16 @@ function renderRiderEditor(){
       </div>
     </div>
   `).join('');
+  renderResetRiderSelect();
+}
+
+// Isi dropdown pilihan rider untuk fitur reset data per rider
+function renderResetRiderSelect(){
+  const sel = document.getElementById('reset-rider-select');
+  if(!sel) return;
+  const nilaiSekarang = sel.value;
+  sel.innerHTML = RIDER_DB.map(r=>`<option value="${r.nama}">${r.nama}</option>`).join('');
+  if(RIDER_DB.some(r=>r.nama===nilaiSekarang)) sel.value = nilaiSekarang;
 }
 function simpanEditRider(idx){
   const nama = document.getElementById(`rider-edit-nama-${idx}`).value.trim();
@@ -1005,7 +1023,29 @@ function resetDataTanggal(){
     return;
   }
 
+  pendingResetTarget = { type: 'tanggal' };
   document.getElementById('reset-pin-detail').innerHTML = `Anda akan menghapus SEMUA data pada tanggal <b>${labelTgl}</b>:<br>• ${jumlahTrx} transaksi<br>• ${jumlahPengeluaran} pengeluaran darurat<br>• ${jumlahSetoran} setoran<br><br>Tanggal lain tidak terpengaruh. Tindakan ini tidak bisa dibatalkan.<br><br>Masukkan PIN Editor untuk melanjutkan:`;
+  document.getElementById('reset-pin-input').value = '';
+  document.getElementById('modal-reset-pin').classList.remove('hidden');
+  setTimeout(() => document.getElementById('reset-pin-input').focus(), 100);
+}
+
+// Reset SEMUA data (transaksi, pengeluaran, setoran) milik satu rider, di semua tanggal - untuk bersih-bersih data simulasi/uji coba
+function resetDataRider(){
+  const rider = document.getElementById('reset-rider-select').value;
+  if(!rider) return alert('Pilih rider terlebih dahulu!');
+
+  const jumlahTrx = DB.filter(d => d.rider === rider).length;
+  const jumlahPengeluaran = PENGELUARAN_DB.filter(p => p.rider === rider).length;
+  const jumlahSetoran = SETORAN_DB.filter(s => s.rider === rider).length;
+
+  if(jumlahTrx === 0 && jumlahPengeluaran === 0 && jumlahSetoran === 0){
+    alert(`Tidak ada data untuk rider "${rider}" yang bisa direset.`);
+    return;
+  }
+
+  pendingResetTarget = { type: 'rider', rider };
+  document.getElementById('reset-pin-detail').innerHTML = `Anda akan menghapus SEMUA data penjualan rider <b>${rider}</b> (di SEMUA tanggal):<br>• ${jumlahTrx} transaksi<br>• ${jumlahPengeluaran} pengeluaran darurat<br>• ${jumlahSetoran} setoran<br><br>Data rider lain tidak terpengaruh. Tindakan ini tidak bisa dibatalkan.<br><br>Masukkan PIN Editor untuk melanjutkan:`;
   document.getElementById('reset-pin-input').value = '';
   document.getElementById('modal-reset-pin').classList.remove('hidden');
   setTimeout(() => document.getElementById('reset-pin-input').focus(), 100);
@@ -1017,7 +1057,16 @@ function konfirmasiResetData(){
     alert('PIN salah! Reset dibatalkan.');
     return;
   }
+  if(!pendingResetTarget) return;
 
+  if(pendingResetTarget.type === 'rider'){
+    konfirmasiResetDataRider(pendingResetTarget.rider);
+  } else {
+    konfirmasiResetDataTanggal();
+  }
+}
+
+function konfirmasiResetDataTanggal(){
   const tglStr = dashSelectedDate.toISOString().split('T')[0];
   const labelTgl = dashSelectedDate.toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' });
 
@@ -1036,7 +1085,26 @@ function konfirmasiResetData(){
     return batch.commit();
   }).then(() => {
     closeModal('modal-reset-pin');
+    pendingResetTarget = null;
     alert(`Data tanggal ${labelTgl} berhasil direset.`);
+  }).catch(err => alert('Gagal reset (cek koneksi internet): '+err.message));
+}
+
+function konfirmasiResetDataRider(rider){
+  Promise.all([
+    db.collection('transaksi').where('rider','==',rider).get(),
+    db.collection('pengeluaran').where('rider','==',rider).get(),
+    db.collection('setoran').where('rider','==',rider).get()
+  ]).then(([trxSnap, pengSnap, setSnap]) => {
+    const batch = db.batch();
+    trxSnap.forEach(d => batch.delete(d.ref));
+    pengSnap.forEach(d => batch.delete(d.ref));
+    setSnap.forEach(d => batch.delete(d.ref));
+    return batch.commit();
+  }).then(() => {
+    closeModal('modal-reset-pin');
+    pendingResetTarget = null;
+    alert(`Semua data penjualan rider "${rider}" berhasil direset.`);
   }).catch(err => alert('Gagal reset (cek koneksi internet): '+err.message));
 }
 
@@ -1270,7 +1338,7 @@ function updateDashboardToday(dateObj){
   const riderStats = {};
   dayData.forEach(d => { if(!riderStats[d.rider]) riderStats[d.rider] = {omzet:0, porsi:0, trx:0, cash:0, qris:0}; riderStats[d.rider].omzet += Number(d.total); riderStats[d.rider].porsi += Number(d.qty); riderStats[d.rider].trx += 1; if(d.bayar==='Cash') riderStats[d.rider].cash += Number(d.total); if(d.bayar==='QRIS') riderStats[d.rider].qris += Number(d.total); });
   
-  document.querySelector('#table-rider-perf tbody').innerHTML = Object.entries(riderStats).sort((a,b) => b[1].omzet - a[1].omzet).map(([r, s]) => `<tr><td><b>${r}</b></td><td>Rp ${s.cash.toLocaleString()}</td><td>Rp ${s.qris.toLocaleString()}</td><td>${s.porsi}</td><td>${s.trx}</td></tr>`).join('');
+  document.querySelector('#table-rider-perf tbody').innerHTML = Object.entries(riderStats).sort((a,b) => b[1].omzet - a[1].omzet).map(([r, s]) => `<tr><td><b>${r}</b></td><td>Rp ${s.cash.toLocaleString('id-ID')}</td><td>Rp ${s.qris.toLocaleString('id-ID')}</td><td><b>Rp ${s.omzet.toLocaleString('id-ID')}</b></td><td>${s.porsi}</td><td>${s.trx}</td></tr>`).join('');
   
   document.querySelector('#table-transaksi tbody').innerHTML = dayData.slice(-20).reverse().map(d=>`<tr><td>${d.waktu.split(' ')[1]}</td><td>${d.rider}</td><td>${d.menu}</td><td>Rp ${Number(d.total).toLocaleString('id-ID')}</td><td><span class="badge badge-${d.bayar.toLowerCase()}">${d.bayar}</span></td></tr>`).join('');
 }
